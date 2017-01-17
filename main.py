@@ -51,31 +51,67 @@ def most_predictable(all_calls, goal):
     :return: the most predictable call for that goal, and the number of calls with that goal.
     """
     call = None
-    num_call = 0
+    num_calls = 0
     for c in all_calls:
         if c.goal == goal:
-            num_call += 1
+            num_calls += 1
             if call == None or c.predictability > call.predictability: 
                 call = c
-    return call, num_call
+    return call, num_calls
 
 
-def most_predictable(all_calls, goal, next_utterance):
-    #TODO
+def most_predictable(all_calls, goal, prev_utterance):
+    """
+    Get the most predictable dialogue for a given goal and a starting point.
+    :param all_calls: list of different calls.
+    :param goal: restriction on the different calls.
+    :param prev_utterance: dialogue must start by an utterance following this one.
+    :return: the most predictable call for that goal, and the number of calls with that goal.
+    """
+    dialogs = []  # list of possible dialogs, we take the most predictable at the end.
+    num_calls = 0
+    for call in all_calls:
+        good_call = False
+        if call.goal == goal:  # share the same goal
+            for turn, label in call:
+                bot_u = turn["output"]["transcript"]
+                user_u = label["transcription"]
+
+                if good_call:  # if was previously flagged as good, append to dialogs.
+                    dialogs[-1].append(bot_u + " | " + user_u)
+
+                # if good_call was reset to false and bot_u matches, flag as good and start a new dialog after that.
+                if not good_call and bot_u == prev_utterance:
+                    good_call = True
+                    dialogs.append([])
+                    num_calls += 1
+
+    assert len(dialogs) == num_calls > 0
+    # if len(dialogs) == 1:
+    #     print "nothing better than current call!"
+
+    # TODO: take the most predictable dialogue!!!
+    best_dialogue = None
+    # if call == None or c.predictability > call.predictability:
+    #     call = c
+    
+    return best_dialogue
 
 
 def goal_proba(call, dialog, all_calls, all_goals):
     """
     Compute the probability of this call's goal GIVEN that we saw the first t utterances.
     :param call: the call to compute the proba on.
-    :param dialog: utterances seen so far.
+    :param dialog: list of utterances seen so far.
     :param all_calls: list of all calls.
     :param all_goals: dictionary of all goals and their counts.
     :return: the proba of this goal given call up until time t.
     """
     init_pred = np.exp(-cost(dialog))  # predictability of the dialog seen so far.
-    next_utterance = #TODO
-    best_remaining_pred = np.exp(-cost(most_predictable(all_calls, goal, next_utterance)))  # predictability of the most predictable remaining dialog for that goal.
+
+    bot_u = dialog[-1].split(" | ")[0]  # last bot utterance seen.
+    best_remaining_pred = np.exp(-cost(most_predictable(all_calls, goal, bot_u)))  # predictability of the most predictable remaining dialog for that goal.
+
     best_pred = all_goals[call.goal][1]  # predictability of the most predictable call for that goal.
     goal_p = all_goals[call.goal][0] / len(all_calls)  # proba of that goal = #of calls with that goal / #of calls.
 

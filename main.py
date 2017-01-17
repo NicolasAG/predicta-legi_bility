@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from dataset_walker import dataset_walker as dw
 import numpy as np
 
@@ -41,6 +42,12 @@ def print_call(call):
         print "user:", label["transcription"]
     print "call.labels[task-information]:", call.labels["task-information"]
     print "goal:", call.goal
+
+
+def predictability(d):
+    """
+    """
+    return np.exp(-cost(d))
 
 
 def most_predictable(all_calls, goal):
@@ -87,14 +94,15 @@ def most_predictable(all_calls, goal, prev_utterance):
                     num_calls += 1
 
     assert len(dialogs) == num_calls > 0
-    # if len(dialogs) == 1:
-    #     print "nothing better than current call!"
+    if len(dialogs) == 1:
+        print "nothing better than current call!"
 
-    # TODO: take the most predictable dialogue!!!
+    # Take the most predictable dialogue
     best_dialogue = None
-    # if call == None or c.predictability > call.predictability:
-    #     call = c
-    
+    for d in dialogs:
+        if best_dialogue == None or predictability(d) > predictability(best_dialogue):
+            best_dialogue = d
+
     return best_dialogue
 
 
@@ -107,10 +115,10 @@ def goal_proba(call, dialog, all_calls, all_goals):
     :param all_goals: dictionary of all goals and their counts.
     :return: the proba of this goal given call up until time t.
     """
-    init_pred = np.exp(-cost(dialog))  # predictability of the dialog seen so far.
+    init_pred = predictability(dialog)  # predictability of the dialog seen so far.
 
     bot_u = dialog[-1].split(" | ")[0]  # last bot utterance seen.
-    best_remaining_pred = np.exp(-cost(most_predictable(all_calls, goal, bot_u)))  # predictability of the most predictable remaining dialog for that goal.
+    best_remaining_pred = predictability(most_predictable(all_calls, goal, bot_u))  # predictability of the most predictable remaining dialog for that goal.
 
     best_pred = all_goals[call.goal][1]  # predictability of the most predictable call for that goal.
     goal_p = all_goals[call.goal][0] / len(all_calls)  # proba of that goal = #of calls with that goal / #of calls.

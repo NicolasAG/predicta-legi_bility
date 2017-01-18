@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from dataset_walker import dataset_walker as dw
 import numpy as np
+import cPickle
 
 
 def cost(trajectory):
@@ -46,11 +47,14 @@ def print_call(call):
 
 def predictability(d):
     """
+    Measure Predictability of a dialog or a call. Something predictable is something with low cost.
+    :param d: iterable to apply the cost function on (Call object, or array of utterances).
+    :return: the predictability.
     """
     return np.exp(-cost(d))
 
 
-def most_predictable(all_calls, goal):
+def most_predictable_call(all_calls, goal):
     """
     Get the most predictable call for a given goal.
     :param all_calls: list of different calls.
@@ -67,7 +71,7 @@ def most_predictable(all_calls, goal):
     return call, num_calls
 
 
-def most_predictable(all_calls, goal, prev_utterance):
+def most_predictable_dialog(all_calls, goal, prev_utterance):
     """
     Get the most predictable dialogue for a given goal and a starting point.
     :param all_calls: list of different calls.
@@ -85,7 +89,7 @@ def most_predictable(all_calls, goal, prev_utterance):
                 user_u = label["transcription"]
 
                 if good_call:  # if was previously flagged as good, append to dialogs.
-                    dialogs[-1].append(bot_u + " | " + user_u)
+                    dialogs[-1].append(bot_u + " | " + user_u)
 
                 # if good_call was reset to false and bot_u matches, flag as good and start a new dialog after that.
                 if not good_call and bot_u == prev_utterance:
@@ -118,12 +122,32 @@ def goal_proba(call, dialog, all_calls, all_goals):
     init_pred = predictability(dialog)  # predictability of the dialog seen so far.
 
     bot_u = dialog[-1].split(" | ")[0]  # last bot utterance seen.
-    best_remaining_pred = predictability(most_predictable(all_calls, goal, bot_u))  # predictability of the most predictable remaining dialog for that goal.
+    best_remaining_pred = predictability(most_predictable_dialog(all_calls, call.goal, bot_u))  # predictability of the most predictable remaining dialog for that goal.
 
-    best_pred = all_goals[call.goal][1]  # predictability of the most predictable call for that goal.
+    best_pred = all_goals[call.goal][1].predictability  # predictability of the most predictable call for that goal.
     goal_p = all_goals[call.goal][0] / len(all_calls)  # proba of that goal = #of calls with that goal / #of calls.
 
+    # print_call(call)
+    # print dialog
+
     return init_pred * best_remaining_pred * goal_p / best_pred
+
+
+def most_legible_call(all_calls, g):
+    """
+    Get the most legible call for a given goal.
+    :param all_calls: list of different calls.
+    :param goal: restriction on the different calls.
+    :return: the most legible call for that goal, and the number of calls with that goal.
+    """
+    call = None
+    num_calls = 0
+    for c in all_calls:
+        if c.goal == goal:
+            num_calls += 1
+            if call == None or c.legibility > call.legibility:
+                call = c
+    return call, num_calls
 
 
 def main():
@@ -133,13 +157,14 @@ def main():
     # print "dstc2_dev:", len(dstc2_dev)  # 506
     # dstc2_test = dw('dstc2_test', cost, goal_success)
     # print "dstc2_test:", len(dstc2_test)  # 1,117
-
     # dstc3_seed = dw('dstc3_seed', cost, goal_success)
     # print "dstc3_seed:", len(dstc3_seed)  # 11
     # dstc3_test = dw('dstc3_test', cost, goal_success)
     # print "dstc3_test:", len(dstc3_test)  # 2,264
 
-    all_calls = dw(['dstc2_train', 'dstc2_dev', 'dstc2_test', 'dstc3_seed', 'dstc3_test'], cost, goal_success)
+    GOAL_FUNCTION = goal_success
+
+    all_calls = dw(['dstc2_train', 'dstc2_dev', 'dstc2_test', 'dstc3_seed', 'dstc3_test'], cost, GOAL_FUNCTION)
     print "all_calls:", len(all_calls)  # 5,510
     # assert len(all_calls) == len(dstc2_train) + len(dstc2_dev) + len(dstc2_test) + len(dstc3_seed) + len(dstc3_test)
 
@@ -153,13 +178,12 @@ def main():
 
     for g, [count] in all_goals.iteritems():
         print "\nLooking for most predictable call with goal", g, "from", count, "calls."
-        most_pred, _ = most_predictable(all_calls, g)
+        most_pred, _ = most_predictable_call(all_calls, g)
         print_call(most_pred)
-
-        all_goals[g].append(most_pred.predictability)  # append the best predictability for that goal.
+        all_goals[g].append(most_pred)  # append the most predictable call for that goal.
 
     print "\nMeasuring Legibility..."
-    for call in all_calls:
+    for i, call in enumerate(all_calls):
         dialog = []  # observed dialog so far: list of alternating utterances.
         t = 0  # current timestep
         total_p = 0  # sum over all timestep t of P(G|s->t) * f(t)
@@ -169,6 +193,7 @@ def main():
             return len(call) - p
 
         for turn, label in call:
+            print "%d.%d / %d.%d" % (i, t, len(all_calls), len(call))
             bot_u = turn["output"]["transcript"]
             user_u = label["transcription"]
 
@@ -179,10 +204,28 @@ def main():
             t += 1
 
         assert t == len(call)
-        print "total_p:", total_p
-        print "total_f:", total_f
         call.legibility = total_p / total_f
-        print "legibility:", call.legibility
+
+    for g, [count] in all_goals.iteritems():
+        print "\nLooking for most legible call with goal", g, "from", count, "calls."
+        most_legi, _ = most_legible_call(all_calls, g)
+        print_call(most_legi)
+        all_goals[g].append(most_legi)  # append the most legible call for that goal.
+
+    print "\nSaving all calls with their predictability & legibility..."
+    print "Saving all goals with their count, most predictable call, and most legible call..."
+    gf = ""
+    if GOAL_FUNCTION == goal_success:
+        gf = "success"
+    elif GOAL_FUNCTION == goal_constraints:
+        gf = "constraints"
+    f = open(
+        "./calls_and_%s-goals" % gf,
+        "wb"
+    )
+    cPickle.dump((all_calls, all_goals), f, protocol=cPickle.HIGHEST_PROTOCOL)
+    f.close()
+    print "done."
 
 
 if __name__ == '__main__':

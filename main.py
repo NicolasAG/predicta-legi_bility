@@ -30,7 +30,7 @@ def goal_constraints(call):
     """
     goal = []
     for constraint in call.labels['task-information']['goal']['constraints']:
-       goal.append(tuple(constraint))
+        goal.append(tuple(constraint))
     return tuple(goal)
 
 
@@ -38,6 +38,7 @@ def print_call(call):
     print "call.log[session-id]:", call.log["session-id"]
     print "cost:", call.cost
     print "predictability:", call.predictability
+    print "legibility:", call.legibility
     for turn, label in call:
         print "bot:", turn["output"]["transcript"]
         print "user:", label["transcription"]
@@ -66,7 +67,7 @@ def most_predictable_call(all_calls, goal):
     for c in all_calls:
         if c.goal == goal:
             num_calls += 1
-            if call == None or c.predictability > call.predictability: 
+            if call is None or c.predictability > call.predictability:
                 call = c
     return call, num_calls
 
@@ -104,7 +105,7 @@ def most_predictable_dialog(all_calls, goal, prev_utterance):
     # Take the most predictable dialogue
     best_dialogue = None
     for d in dialogs:
-        if best_dialogue == None or predictability(d) > predictability(best_dialogue):
+        if best_dialogue is None or predictability(d) > predictability(best_dialogue):
             best_dialogue = d
 
     return best_dialogue
@@ -133,7 +134,7 @@ def goal_proba(call, dialog, all_calls, all_goals):
     return init_pred * best_remaining_pred * goal_p / best_pred
 
 
-def most_legible_call(all_calls, g):
+def most_legible_call(all_calls, goal):
     """
     Get the most legible call for a given goal.
     :param all_calls: list of different calls.
@@ -145,7 +146,7 @@ def most_legible_call(all_calls, g):
     for c in all_calls:
         if c.goal == goal:
             num_calls += 1
-            if call == None or c.legibility > call.legibility:
+            if call is None or c.legibility > call.legibility:
                 call = c
     return call, num_calls
 
